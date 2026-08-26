@@ -229,6 +229,26 @@
 </style>
 </head><body>
 
+<div class="modal-overlay" id="authOverlay" style="display:flex;">
+  <div class="card" style="max-width:380px;width:100%;">
+    <div class="eyebrow">Rumo ao Inglês</div>
+    <h2 id="authTitle" style="margin:0.3rem 0 1rem;">Entrar</h2>
+    <div class="btn-row" style="margin-bottom:1rem;">
+      <input type="email" id="authEmail" placeholder="seu e-mail" autocomplete="username" style="flex:1;min-width:0;font:inherit;padding:0.6rem 0.8rem;border-radius:0.55rem;border:1px solid var(--line);background:var(--surface);">
+    </div>
+    <div class="btn-row" style="margin-bottom:0.4rem;">
+      <input type="password" id="authPassword" placeholder="sua senha" autocomplete="current-password" style="flex:1;min-width:0;font:inherit;padding:0.6rem 0.8rem;border-radius:0.55rem;border:1px solid var(--line);background:var(--surface);">
+    </div>
+    <div id="authError" class="pronounce-feedback miss" style="display:none;margin-top:0.5rem;"></div>
+    <div class="btn-row" style="margin-top:0.9rem;">
+      <button class="btn btn-accent" id="authSubmitBtn" type="button" style="flex:1;">Entrar</button>
+    </div>
+    <p style="margin-top:0.9rem;font-size:0.85rem;color:var(--ink-soft);text-align:center;">
+      <span id="authSwitchLabel">Ainda não tem conta?</span> <a href="#" id="authSwitchLink">Criar conta</a>
+    </p>
+  </div>
+</div>
+
 <div class="shell">
   <div class="masthead">
     <div class="eyebrow">Método pessoal · PT → EN</div>
@@ -236,7 +256,11 @@
     <p>Seis técnicas reais de poliglotas famosos, cada uma virando uma ferramenta funcional aqui dentro — sem depender de sorte, talento ou IA paga.</p>
     <div class="tabs-row">
       <div class="tabs" role="tablist" id="tabBar"></div>
-      <button class="reset-btn" id="resetProgressBtn" type="button" title="Apaga todo o progresso salvo neste navegador">↺ Resetar progresso</button>
+      <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+        <span class="hint" id="authUserBadge"></span>
+        <button class="reset-btn" id="authLogoutBtn" type="button" title="Sair da conta" style="display:none;">Sair</button>
+        <button class="reset-btn" id="resetProgressBtn" type="button" title="Apaga todo o progresso salvo neste navegador">↺ Resetar progresso</button>
+      </div>
     </div>
   </div>
 
@@ -476,8 +500,113 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-(function() {
+(async function() {
+  // ---------------------------------------------------------------------
+  // Autenticação (Supabase)
+  // ---------------------------------------------------------------------
+  var SUPABASE_URL = "https://dhiphqqeobnnokesgeos.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoaXBocXFlb2Jubm9rZXNnZW9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzY0NTEsImV4cCI6MjEwMzE1MjQ1MX0.YDfvfPMzRZT4KgVQSJce3qNOqoPkCV69URLqfXJ3aSg";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var currentUser = null;
+
+  var authOverlay = document.getElementById("authOverlay");
+  var authTitle = document.getElementById("authTitle");
+  var authEmail = document.getElementById("authEmail");
+  var authPassword = document.getElementById("authPassword");
+  var authError = document.getElementById("authError");
+  var authSubmitBtn = document.getElementById("authSubmitBtn");
+  var authSwitchLabel = document.getElementById("authSwitchLabel");
+  var authSwitchLink = document.getElementById("authSwitchLink");
+  var authMode = "signin";
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    authError.style.display = "none";
+    if (mode === "signin") {
+      authTitle.textContent = "Entrar";
+      authSubmitBtn.textContent = "Entrar";
+      authSwitchLabel.textContent = "Ainda não tem conta?";
+      authSwitchLink.textContent = "Criar conta";
+    } else {
+      authTitle.textContent = "Criar conta";
+      authSubmitBtn.textContent = "Criar conta";
+      authSwitchLabel.textContent = "Já tem conta?";
+      authSwitchLink.textContent = "Entrar";
+    }
+  }
+  authSwitchLink.onclick = function(e) { e.preventDefault(); setAuthMode(authMode === "signin" ? "signup" : "signin"); };
+
+  function showAuthError(msg) { authError.textContent = msg; authError.style.display = "block"; }
+
+  function doAuthSubmit() {
+    var email = authEmail.value.trim();
+    var password = authPassword.value;
+    if (!email || !password) { showAuthError("Preencha e-mail e senha."); return; }
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = "Aguarde…";
+    var action = authMode === "signin"
+      ? sb.auth.signInWithPassword({ email: email, password: password })
+      : sb.auth.signUp({ email: email, password: password });
+    action.then(function(res) {
+      authSubmitBtn.disabled = false;
+      setAuthMode(authMode);
+      if (res.error) { showAuthError(res.error.message); return; }
+      if (!res.data.session) { showAuthError("Confirme seu e-mail para continuar, ou fale com quem configurou o app."); return; }
+      currentUser = res.data.user;
+      finishAuth();
+    }).catch(function() {
+      authSubmitBtn.disabled = false;
+      setAuthMode(authMode);
+      showAuthError("Não foi possível conectar. Verifique sua internet.");
+    });
+  }
+  authSubmitBtn.onclick = doAuthSubmit;
+  authPassword.addEventListener("keydown", function(e) { if (e.key === "Enter") doAuthSubmit(); });
+
+  function waitForAuthSubmit() {
+    return new Promise(function(resolve) { window.__authResolve = resolve; });
+  }
+  function finishAuth() {
+    authOverlay.style.display = "none";
+    if (window.__authResolve) { window.__authResolve(); window.__authResolve = null; }
+  }
+
+  var cloudState = null;
+  var sessionData = null;
+  try { var res = await sb.auth.getSession(); sessionData = res.data; } catch (e) { /* network unavailable — fall through to login form */ }
+  if (sessionData && sessionData.session) {
+    currentUser = sessionData.session.user;
+    authOverlay.style.display = "none";
+  } else {
+    await waitForAuthSubmit();
+  }
+
+  if (currentUser) {
+    try {
+      var { data: row } = await sb.from("progress").select("state").eq("user_id", currentUser.id).maybeSingle();
+      if (row && row.state) cloudState = row.state;
+    } catch (e) { /* offline — fall back to local state */ }
+  }
+
+  var authUserBadge = document.getElementById("authUserBadge");
+  var authLogoutBtn = document.getElementById("authLogoutBtn");
+  if (currentUser) {
+    authUserBadge.textContent = currentUser.email;
+    authLogoutBtn.style.display = "inline-flex";
+    authLogoutBtn.onclick = function() { sb.auth.signOut().then(function() { window.location.reload(); }); };
+  }
+
+  var syncTimer = null;
+  function syncToCloud() {
+    if (!currentUser) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(function() {
+      sb.from("progress").upsert({ user_id: currentUser.id, state: state, updated_at: new Date().toISOString() }).then(function() {});
+    }, 1200);
+  }
+
   // ---------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------
@@ -497,7 +626,7 @@
   }
   function loadState() {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      var raw = cloudState ? JSON.stringify(cloudState) : localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
       var parsed = JSON.parse(raw);
       var d = defaultState();
@@ -507,8 +636,10 @@
   }
   function saveState() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+    syncToCloud();
   }
   var state = loadState();
+  syncToCloud();
 
   function todayKey() { return new Date().toISOString().slice(0, 10); }
   function dayHasActivity(key) {
@@ -1682,9 +1813,13 @@
   }
 
   function doResetProgress() {
-    showConfirm("Isso apaga todo o progresso salvo neste navegador (palavras, caderno, rotina e avaliações). Continuar?", function() {
+    showConfirm("Isso apaga todo o progresso salvo (palavras, caderno, rotina e avaliações). Continuar?", function() {
       try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* storage unavailable */ }
-      location.reload();
+      if (currentUser) {
+        sb.from("progress").upsert({ user_id: currentUser.id, state: defaultState(), updated_at: new Date().toISOString() }).then(function() { location.reload(); });
+      } else {
+        location.reload();
+      }
     });
   }
   document.getElementById("resetProgressLink").onclick = function(e) { e.preventDefault(); doResetProgress(); };
