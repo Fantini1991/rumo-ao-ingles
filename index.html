@@ -1,7 +1,4 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Rumo ao Inglês</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -221,8 +218,7 @@
 
   @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 </style>
-</head>
-<body>
+</head><body>
 
 <div class="shell">
   <div class="masthead">
@@ -381,6 +377,7 @@
       <div class="card" style="width:100%;max-width:560px;text-align:center;"><div class="tts-sentence" id="shadowSentence"></div></div>
       <div class="btn-row">
         <button class="btn btn-ghost" id="listenBtn" type="button">🔊 Ouvir</button>
+        <button class="btn btn-ghost speed-toggle-btn" id="listenSpeedBtn" type="button">🐇 Normal</button>
       </div>
       <div class="pronounce-row">
         <button class="mic-btn" id="shadowMicBtn" type="button" aria-label="Repetir a frase">🎤</button>
@@ -857,7 +854,7 @@
   var testRecognition = null, testRecognizing = false, testFinalTranscript = "";
   if (SpeechRecognitionCtor) { testRecognition = new SpeechRecognitionCtor(); testRecognition.lang = "en-US"; testRecognition.continuous = true; testRecognition.interimResults = true; }
 
-  function speakText(text, onWordIndex) {
+  function speakText(text, onWordIndex, rate) {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     var offsets = [];
@@ -865,7 +862,7 @@
     while ((m = re.exec(text))) offsets.push(m.index);
     var utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
-    utter.rate = 0.85;
+    utter.rate = rate || 0.85;
     utter.onboundary = function(e) {
       if (e.name && e.name !== "word") return;
       var idx = 0;
@@ -873,6 +870,34 @@
       onWordIndex && onWordIndex(idx);
     };
     window.speechSynthesis.speak(utter);
+  }
+
+  var speechRate = 0.85;
+  function speedBtnLabel() { return speechRate < 0.85 ? "🐢 Devagar" : "🐇 Normal"; }
+  function refreshSpeedBtns() {
+    Array.prototype.forEach.call(document.querySelectorAll(".speed-toggle-btn"), function(b) { b.textContent = speedBtnLabel(); });
+  }
+  function wireSpeedBtn(id) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.add("speed-toggle-btn");
+    btn.textContent = speedBtnLabel();
+    btn.onclick = function() {
+      speechRate = speechRate < 0.85 ? 0.85 : 0.5;
+      refreshSpeedBtns();
+    };
+  }
+  function guessWordHtml(word, idPrefix) {
+    return '<div class="guess-word-row" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">' +
+      '<span class="guess-word">' + word + '</span>' +
+      '<button class="btn btn-ghost" id="' + idPrefix + 'SpeakBtn" type="button" style="padding:0.3rem 0.55rem;font-size:0.9rem;" title="Ouvir pronúncia">🔊</button>' +
+      '<button class="btn btn-ghost speed-toggle-btn" id="' + idPrefix + 'SpeedBtn" type="button" style="padding:0.3rem 0.55rem;font-size:0.8rem;" title="Velocidade da fala">' + speedBtnLabel() + '</button>' +
+      '</div>';
+  }
+  function wireGuessWordSpeak(idPrefix, word) {
+    var speakBtn = document.getElementById(idPrefix + "SpeakBtn");
+    if (speakBtn) speakBtn.onclick = function() { speakText(word, null, speechRate); };
+    wireSpeedBtn(idPrefix + "SpeedBtn");
   }
 
   // ---------------------------------------------------------------------
@@ -1854,9 +1879,10 @@
     inputGuessSection.style.display = "flex";
 
     if (inputInfinitiveMode) {
-      inputGuessBox.innerHTML = '<div class="step-label">Marcador de infinitivo</div><div class="guess-word">to ' + inputInfinitiveNext + '</div>' +
+      inputGuessBox.innerHTML = '<div class="step-label">Marcador de infinitivo</div>' + guessWordHtml("to " + inputInfinitiveNext, "inputInfGuess") +
         '<div class="grammar-note" style="margin-top:0.6rem;">💡 Aqui, \"to\" vem antes de um verbo (\"to <strong>' + inputInfinitiveNext + '</strong>\") — é só o marcador de infinitivo, <strong>sem tradução própria</strong>. \"to ' + inputInfinitiveNext + '\" = \"' + (lookupTranslation(null, inputInfinitiveNext) || inputInfinitiveNext) + '\".</div>' +
         '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-know" id="inputInfinitiveOkBtn" type="button">Entendi ✓</button></div>';
+      wireGuessWordSpeak("inputInfGuess", "to " + inputInfinitiveNext);
       document.getElementById("inputInfinitiveOkBtn").onclick = function() {
         state.knownWords["to"] = "known";
         saveState();
@@ -1875,9 +1901,10 @@
       var noteExtra = inputPhrasalSkipped
         ? ' Repare que esse é um verbo frasal <strong>separável</strong>: \"' + inputPhrasalSkipped + '\" (o objeto) entrou no meio de \"' + inputPhrasalVerb + '\" e \"' + inputPhrasalParticle + '\".'
         : '';
-      inputGuessBox.innerHTML = '<div class="step-label">Verbo frasal</div><div class="guess-word">' + displayForm + '</div>' +
+      inputGuessBox.innerHTML = '<div class="step-label">Verbo frasal</div>' + guessWordHtml(displayForm, "inputPhrasalGuess") +
         '<div class="grammar-note" style="margin-top:0.6rem;">💡 Aqui, \"<strong>' + inputPhrasalParticle + '</strong>\" não tem tradução própria — ele é parte do verbo frasal \"<strong>' + inputPhrasalVerb + ' ' + inputPhrasalParticle + '</strong>\", que juntos significam algo diferente da soma das partes: \"' + inputPhrasalVerb + ' ' + inputPhrasalParticle + '\" = \"' + meaning + '\".' + noteExtra + '</div>' +
         '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-know" id="inputPhrasalOkBtn" type="button">Entendi ✓</button></div>';
+      wireGuessWordSpeak("inputPhrasalGuess", inputPhrasalVerb + " " + inputPhrasalParticle);
       document.getElementById("inputPhrasalOkBtn").onclick = function() {
         state.knownWords[inputPhrasalParticle] = "known";
         saveState();
@@ -1890,7 +1917,7 @@
 
     var resolved = resolveMeaning(inputCurrentText, inputGuessWord, inputGuessPrevWord);
     var pt = resolved ? resolved.pt : null;
-    var html = '<div class="step-label">O que você acha que essa palavra significa?</div><div class="guess-word">' + inputGuessWord + '</div>';
+    var html = '<div class="step-label">O que você acha que essa palavra significa?</div>' + guessWordHtml(inputGuessWord, "inputWordGuess");
     if (!inputGuessRevealed) {
       html += '<div class="btn-row" style="margin-top:0.6rem;flex-wrap:nowrap;">' +
         '<input type="text" id="inputGuessInput" placeholder="sua tradução..." autocomplete="off" style="flex:1;min-width:0;font:inherit;padding:0.55rem 0.75rem;border-radius:0.55rem;border:1px solid var(--line);background:var(--surface);">' +
@@ -1908,6 +1935,7 @@
       html += '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-know" id="inputSaveNotebookBtn" type="button" ' + (alreadySaved ? "disabled" : "") + '>' + (alreadySaved ? "✓ Salvo no caderno" : "+ Salvar no caderno") + '</button></div>';
     }
     inputGuessBox.innerHTML = html;
+    wireGuessWordSpeak("inputWordGuess", inputGuessWord);
     var saveBtn = document.getElementById("inputSaveNotebookBtn");
     if (saveBtn) {
       saveBtn.onclick = function() {
@@ -1954,6 +1982,7 @@
     var html = '<div class="step-label">Traduza esta frase</div><div class="source-text">' + sent.en + '</div>' +
       '<div class="btn-row" style="margin-top:0.6rem;align-items:center;">' +
         '<button class="btn btn-ghost" id="inputSentenceListenBtn" type="button">🔊 Ouvir</button>' +
+        '<button class="btn btn-ghost speed-toggle-btn" id="inputSentenceSpeedBtn" type="button">' + speedBtnLabel() + '</button>' +
         (SpeechRecognitionCtor ? '<button class="mic-btn" id="inputSentenceMicBtn" type="button" aria-label="Praticar pronúncia" style="width:2.4rem;height:2.4rem;font-size:1.05rem;">🎤</button>' : '') +
       '</div>' +
       '<div class="pronounce-feedback idle" id="inputSentencePronFeedback" style="margin-top:0.4rem;display:none;"></div>' +
@@ -1972,7 +2001,8 @@
     }
     inputSentenceBox.innerHTML = html;
     document.getElementById("inputSentenceCloseBtn").onclick = closeInputSentence;
-    document.getElementById("inputSentenceListenBtn").onclick = function() { speakText(sent.en); };
+    document.getElementById("inputSentenceListenBtn").onclick = function() { speakText(sent.en, null, speechRate); };
+    wireSpeedBtn("inputSentenceSpeedBtn");
     var sentMicBtn = document.getElementById("inputSentenceMicBtn");
     if (sentMicBtn) {
       sentMicBtn.addEventListener("click", function() {
@@ -2138,7 +2168,7 @@
     var s = leituraCurrentText;
     var resolved = modalConjugation(activeGuessWord, activeGuessPrevWord) || ambiguousSense(activeGuessWord, activeGuessPrevWord);
     var pt = resolved ? resolved.pt : s.glossary[activeGuessWord];
-    var html = '<div class="step-label">O que você acha que essa palavra significa?</div><div class="guess-word">' + activeGuessWord + '</div>';
+    var html = '<div class="step-label">O que você acha que essa palavra significa?</div>' + guessWordHtml(activeGuessWord, "leituraWordGuess");
     if (!guessRevealed) {
       html += '<div class="btn-row" style="margin-top:0.6rem;flex-wrap:nowrap;">' +
         '<input type="text" id="guessInput" placeholder="sua tradução..." autocomplete="off" style="flex:1;min-width:0;font:inherit;padding:0.55rem 0.75rem;border-radius:0.55rem;border:1px solid var(--line);background:var(--surface);">' +
@@ -2156,6 +2186,7 @@
       html += '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-know" id="saveNotebookBtn" type="button" ' + (leituraAlreadySaved ? "disabled" : "") + '>' + (leituraAlreadySaved ? "✓ Salvo no caderno" : "+ Salvar no caderno") + '</button></div>';
     }
     guessBox.innerHTML = html;
+    wireGuessWordSpeak("leituraWordGuess", activeGuessWord);
     if (!guessRevealed) {
       var input = document.getElementById("guessInput");
       input.focus();
@@ -2396,8 +2427,9 @@
       Array.prototype.forEach.call(shadowSentenceEl.querySelectorAll(".tts-word"), function(el) { el.classList.remove("tts-active"); });
       var target = shadowSentenceEl.querySelector('.tts-word[data-i="' + idx + '"]');
       if (target) target.classList.add("tts-active");
-    });
+    }, speechRate);
   };
+  wireSpeedBtn("listenSpeedBtn");
   if (SpeechRecognitionCtor) {
     shadowMicBtn.addEventListener("click", function() {
       var s = SHADOW_SENTENCES[shadowLevel][shadowIndex];
@@ -2612,5 +2644,4 @@
   }
 })();
 </script>
-</body>
-</html>
+</body></html>
