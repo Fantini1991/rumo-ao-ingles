@@ -189,6 +189,15 @@
   .tts-word { transition: background 0.15s ease; border-radius: 0.2rem; padding: 0 0.05rem; }
   .tts-word.tts-active { background: var(--accent-soft); color: var(--accent-ink); }
 
+  /* vídeos */
+  .video-results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; margin-top: 0.8rem; }
+  .video-result-card { cursor: pointer; border: 1px solid var(--line); border-radius: 0.6rem; overflow: hidden; background: var(--surface); transition: transform 0.1s ease, box-shadow 0.15s ease; }
+  .video-result-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  .video-result-card img { width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover; }
+  .video-result-title { font-size: 0.85rem; padding: 0.5rem 0.6rem; line-height: 1.3; }
+  .video-embed-wrap { position: relative; width: 100%; max-width: 720px; aspect-ratio: 16/9; margin-top: 0.8rem; border-radius: 0.6rem; overflow: hidden; background: #000; }
+  .video-embed-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
   /* rotina */
   .streak-badge { display: flex; align-items: center; gap: 0.7rem; }
   .streak-badge .flame { font-size: 2.2rem; }
@@ -407,6 +416,26 @@
   </div>
 
   <!-- AVALIAÇÕES -->
+  <!-- VÍDEOS -->
+  <div class="view" id="view-videos">
+    <section>
+      <div class="section-head"><h2>Vídeos</h2><span class="hint">busque uma música ou vídeo, pratique com legendas em inglês</span></div>
+      <p style="color:var(--ink-soft);font-size:0.9rem;max-width:640px;">Digite o nome de uma música, cantor ou qualquer vídeo. O player já carrega com legendas em inglês ligadas — use o ícone de legendas (CC) dentro do próprio vídeo do YouTube para trocar de idioma, se houver tradução disponível.</p>
+      <div class="btn-row" style="margin-top:0.8rem;flex-wrap:nowrap;">
+        <input type="text" id="videoSearchInput" placeholder="nome da música, cantor ou vídeo..." autocomplete="off" style="flex:1;min-width:0;font:inherit;padding:0.6rem 0.8rem;border-radius:0.55rem;border:1px solid var(--line);background:var(--surface);">
+        <button class="btn btn-accent" id="videoSearchBtn" type="button">Buscar</button>
+      </div>
+      <div id="videoSearchStatus" style="margin-top:0.5rem;font-size:0.85rem;color:var(--ink-soft);"></div>
+    </section>
+    <section id="videoPlayerSection" style="display:none;">
+      <div class="section-head"><h2 style="font-size:1.05rem;">Assistindo agora</h2></div>
+      <div class="video-embed-wrap"><iframe id="videoEmbedFrame" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+    </section>
+    <section>
+      <div id="videoResults" class="video-results-grid"></div>
+    </section>
+  </div>
+
   <div class="view" id="view-avaliacoes">
     <section>
       <div class="section-head"><h2>Avaliações</h2><span class="hint">testes com relatório, sem IA</span></div>
@@ -1609,6 +1638,7 @@
     { id: "fala", label: "Fala" },
     { id: "shadowing", label: "Shadowing" },
     { id: "rotina", label: "Rotina" },
+    { id: "videos", label: "Vídeos" },
     { id: "avaliacoes", label: "Avaliações" },
     { id: "caderno", label: "Meu Caderno" }
   ];
@@ -2479,6 +2509,53 @@
     document.getElementById("weekGridMini").innerHTML = days.join('');
   }
   renderRotina();
+
+  // ---------------------------------------------------------------------
+  // Vídeos (busca no YouTube)
+  // ---------------------------------------------------------------------
+  var YOUTUBE_API_KEY = "AIzaSyCCfsd55EX5BQFJfBQoLtN8PyT6PkmYpgk";
+  var videoSearchInput = document.getElementById("videoSearchInput");
+  var videoSearchBtn = document.getElementById("videoSearchBtn");
+  var videoSearchStatus = document.getElementById("videoSearchStatus");
+  var videoResultsEl = document.getElementById("videoResults");
+  var videoPlayerSection = document.getElementById("videoPlayerSection");
+  var videoEmbedFrame = document.getElementById("videoEmbedFrame");
+  function runVideoSearch() {
+    var q = videoSearchInput.value.trim();
+    if (!q) return;
+    videoSearchStatus.textContent = "Buscando…";
+    videoResultsEl.innerHTML = "";
+    var url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=" + encodeURIComponent(q) + "&key=" + YOUTUBE_API_KEY;
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.error) {
+        videoSearchStatus.textContent = "Erro na busca: " + (data.error.message || "tente novamente.");
+        return;
+      }
+      var items = data.items || [];
+      if (!items.length) { videoSearchStatus.textContent = "Nenhum resultado encontrado."; return; }
+      videoSearchStatus.textContent = "";
+      videoResultsEl.innerHTML = items.map(function(item) {
+        var vid = item.id.videoId;
+        var thumb = item.snippet.thumbnails && (item.snippet.thumbnails.medium || item.snippet.thumbnails.default);
+        return '<div class="video-result-card" data-vid="' + vid + '">' +
+          '<img src="' + (thumb ? thumb.url : "") + '" alt="">' +
+          '<div class="video-result-title">' + escapeHtml(item.snippet.title) + '</div>' +
+          '</div>';
+      }).join('');
+    }).catch(function() {
+      videoSearchStatus.textContent = "Não foi possível buscar agora. Verifique sua conexão.";
+    });
+  }
+  videoSearchBtn.onclick = runVideoSearch;
+  videoSearchInput.addEventListener("keydown", function(e) { if (e.key === "Enter") runVideoSearch(); });
+  videoResultsEl.addEventListener("click", function(e) {
+    var card = e.target.closest(".video-result-card");
+    if (!card) return;
+    var vid = card.getAttribute("data-vid");
+    videoEmbedFrame.src = "https://www.youtube.com/embed/" + vid + "?cc_load_policy=1&cc_lang_pref=en&autoplay=1";
+    videoPlayerSection.style.display = "block";
+    videoPlayerSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   // ---------------------------------------------------------------------
   // Avaliações
