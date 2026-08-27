@@ -459,19 +459,16 @@
     <section id="videoPlayerSection" style="display:none;">
       <div class="section-head"><h2 style="font-size:1.05rem;">Assistindo agora</h2></div>
       <div class="video-embed-wrap"><iframe id="videoEmbedFrame" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
-    </section>
-    <section>
-      <div id="videoResults" class="video-results-grid"></div>
-    </section>
-    <section>
-      <div class="section-head"><h2 style="font-size:1.05rem;">Cole a letra pra praticar</h2><span class="hint">use a letra da música que você está ouvindo</span></div>
-      <p style="color:var(--ink-soft);font-size:0.9rem;max-width:640px;">Cole abaixo a letra da música (copiada por você mesmo de algum lugar). O app não guarda nem mostra letra de música nenhuma por conta própria — isso aqui é só um espaço de trabalho pra você treinar leitura, pronúncia e tradução com o seu próprio texto.</p>
-      <textarea class="field" id="lyricsInput" placeholder="cole a letra aqui..." style="margin-top:0.7rem;min-height:120px;"></textarea>
+      <p style="color:var(--ink-soft);font-size:0.85rem;margin-top:0.6rem;max-width:640px;">💡 Muitos vídeos de prática mostram o texto na tela (como legendas embutidas ou balões de fala) — pause e digite abaixo o que aparece ou o que você entendeu ouvindo.</p>
+      <textarea class="field" id="lyricsInput" placeholder="cole ou digite aqui a letra, o diálogo ou as frases que você ouviu..." style="margin-top:0.6rem;min-height:120px;"></textarea>
       <div class="btn-row" style="margin-top:0.7rem;">
-        <button class="btn btn-accent" id="lyricsPracticeBtn" type="button">Praticar esta letra</button>
+        <button class="btn btn-accent" id="lyricsPracticeBtn" type="button">Praticar este texto</button>
       </div>
       <div id="lyricsLines" style="margin-top:0.9rem;display:flex;flex-direction:column;gap:0.5rem;"></div>
       <div id="lyricsWordBox" class="card" style="margin-top:0.9rem;display:none;max-width:480px;"></div>
+    </section>
+    <section>
+      <div id="videoResults" class="video-results-grid"></div>
     </section>
   </div>
 
