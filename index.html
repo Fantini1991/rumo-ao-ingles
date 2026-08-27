@@ -197,6 +197,11 @@
   .video-result-title { font-size: 0.85rem; padding: 0.5rem 0.6rem; line-height: 1.3; }
   .video-embed-wrap { position: relative; width: 100%; max-width: 720px; aspect-ratio: 16/9; margin-top: 0.8rem; border-radius: 0.6rem; overflow: hidden; background: #000; }
   .video-embed-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .lyrics-line { display: flex; align-items: flex-start; gap: 0.5rem; }
+  .lyrics-line-btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 50%; width: 1.9rem; height: 1.9rem; flex-shrink: 0; cursor: pointer; font-size: 0.85rem; }
+  .lyrics-line-btn:hover { color: var(--ink); }
+  .lyrics-line-text { line-height: 1.6; }
+  .lyrics-line-text .word-token:hover { background: var(--accent-soft); }
 
   /* rotina */
   .streak-badge { display: flex; align-items: center; gap: 0.7rem; }
@@ -439,7 +444,6 @@
     </section>
   </div>
 
-  <!-- AVALIAÇÕES -->
   <!-- VÍDEOS -->
   <div class="view" id="view-videos">
     <section>
@@ -457,6 +461,16 @@
     </section>
     <section>
       <div id="videoResults" class="video-results-grid"></div>
+    </section>
+    <section>
+      <div class="section-head"><h2 style="font-size:1.05rem;">Cole a letra pra praticar</h2><span class="hint">use a letra da música que você está ouvindo</span></div>
+      <p style="color:var(--ink-soft);font-size:0.9rem;max-width:640px;">Cole abaixo a letra da música (copiada por você mesmo de algum lugar). O app não guarda nem mostra letra de música nenhuma por conta própria — isso aqui é só um espaço de trabalho pra você treinar leitura, pronúncia e tradução com o seu próprio texto.</p>
+      <textarea class="field" id="lyricsInput" placeholder="cole a letra aqui..." style="margin-top:0.7rem;min-height:120px;"></textarea>
+      <div class="btn-row" style="margin-top:0.7rem;">
+        <button class="btn btn-accent" id="lyricsPracticeBtn" type="button">Praticar esta letra</button>
+      </div>
+      <div id="lyricsLines" style="margin-top:0.9rem;display:flex;flex-direction:column;gap:0.5rem;"></div>
+      <div id="lyricsWordBox" class="card" style="margin-top:0.9rem;display:none;max-width:480px;"></div>
     </section>
   </div>
 
@@ -1267,6 +1281,27 @@
     like: "Pode ser verbo, \"<strong>gostar de</strong>\" — \"I <strong>like</strong> coffee\" = \"eu <strong>gosto de</strong> café\"; ou preposição de comparação, \"<strong>como</strong>\" — \"<strong>like</strong> a bird\" = \"<strong>como</strong> um pássaro\".",
     turn: "Pode ser \"<strong>virar</strong>\" (mudança física de direção) — \"<strong>turn</strong> left\" = \"<strong>virar</strong> à esquerda\"; ou \"<strong>tornar-se/ficar</strong>\" (mudança de estado) — \"<strong>turn</strong> cold\" = \"<strong>ficar</strong> frio\"."
   };
+
+  // Informal spoken contractions/abbreviations — very common in song lyrics
+  // and casual speech, but pronounced quite differently from their full
+  // form (e.g. "gonna" /ˈɡɒnə/ vs "going to"). Surfaced as a note wherever
+  // a word is looked up, so the reduced pronunciation makes sense.
+  var CONTRACTIONS = {
+    gonna: "going to", wanna: "want to", gotta: "got to / have got to",
+    gimme: "give me", lemme: "let me", kinda: "kind of", sorta: "sort of",
+    outta: "out of", lotta: "a lot of", gotcha: "got you / got it",
+    whatcha: "what are you / what do you", "c'mon": "come on",
+    "y'all": "you all", "ain't": "am not / is not / are not / has not / have not",
+    "'cause": "because", cuz: "because", "'em": "them", dunno: "don't know",
+    tryna: "trying to", finna: "fixing to (\"about to\")",
+    "shoulda": "should have", "coulda": "could have", "woulda": "would have",
+    "musta": "must have", "shouldna": "should not have"
+  };
+  function contractionNoteHtml(word) {
+    var full = CONTRACTIONS[word.toLowerCase()];
+    if (!full) return "";
+    return '<div class="grammar-note">💡 \"<strong>' + word + '</strong>\" é uma forma reduzida/informal de fala — vem de \"<strong>' + full + '</strong>\". Por isso a pronúncia foge da escrita: é assim que as palavras realmente soam juntas na fala corrida (muito comum em música).</div>';
+  }
 
   function lookupTranslation(text, word) {
     var g = (text && text.glossary) || {};
@@ -2096,6 +2131,7 @@
       if (resolved && resolved.isModal) html += modalNoteHtml(inputGuessWord, resolved);
       else if (resolved && resolved.sense) html += ambiguousNoteHtml(inputGuessWord, resolved);
       if (GRAMMAR_NOTES[inputGuessWord]) html += '<div class="grammar-note">💡 <strong>Nota gramatical:</strong> ' + GRAMMAR_NOTES[inputGuessWord] + '</div>';
+      html += contractionNoteHtml(inputGuessWord);
       var alreadySaved = state.savedPhrases.some(function(sp) { return sp.en === inputGuessWord; });
       html += '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-know" id="inputSaveNotebookBtn" type="button" ' + (alreadySaved ? "disabled" : "") + '>' + (alreadySaved ? "✓ Salvo no caderno" : "+ Salvar no caderno") + '</button></div>';
     }
@@ -2347,6 +2383,7 @@
       if (resolved && resolved.isModal) html += modalNoteHtml(activeGuessWord, resolved);
       else if (resolved) html += ambiguousNoteHtml(activeGuessWord, resolved);
       if (GRAMMAR_NOTES[activeGuessWord]) html += '<div class="grammar-note">💡 <strong>Nota gramatical:</strong> ' + GRAMMAR_NOTES[activeGuessWord] + '</div>';
+      html += contractionNoteHtml(activeGuessWord);
       var leituraAlreadySaved = state.savedPhrases.some(function(p) { return p.en === activeGuessWord; });
       html += '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-know" id="saveNotebookBtn" type="button" ' + (leituraAlreadySaved ? "disabled" : "") + '>' + (leituraAlreadySaved ? "✓ Salvo no caderno" : "+ Salvar no caderno") + '</button></div>';
     }
@@ -2690,6 +2727,66 @@
     videoEmbedFrame.src = "https://www.youtube.com/embed/" + vid + "?cc_load_policy=1&cc_lang_pref=en&autoplay=1";
     videoPlayerSection.style.display = "block";
     videoPlayerSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  // Cole a letra pra praticar — texto colado pelo próprio usuário, nunca
+  // fornecido ou guardado pelo app; só um espaço de trabalho client-side.
+  var lyricsInput = document.getElementById("lyricsInput");
+  var lyricsPracticeBtn = document.getElementById("lyricsPracticeBtn");
+  var lyricsLinesEl = document.getElementById("lyricsLines");
+  var lyricsWordBox = document.getElementById("lyricsWordBox");
+  var lyricsLines = [];
+  function escapeAttr(s) { return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  lyricsPracticeBtn.onclick = function() {
+    lyricsLines = lyricsInput.value.split(/\n+/).map(function(l) { return l.trim(); }).filter(Boolean);
+    lyricsWordBox.style.display = "none";
+    lyricsLinesEl.innerHTML = lyricsLines.map(function(line, li) {
+      var words = line.split(/\s+/);
+      var wordsHtml = words.map(function(w) {
+        return '<span class="word-token" data-word="' + escapeAttr(w) + '">' + escapeHtml(w) + '</span>';
+      }).join(' ');
+      return '<div class="lyrics-line"><button class="lyrics-line-btn" data-li="' + li + '" type="button" title="Ouvir esta linha">🔊</button><span class="lyrics-line-text">' + wordsHtml + '</span></div>';
+    }).join('');
+  };
+  function cleanLyricsWord(w) { return w.replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, ""); }
+  function fetchWordTranslation(word) {
+    var url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(word) + "&langpair=en|pt-br";
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      var resultEl = document.getElementById("lyricsWordResult");
+      if (!resultEl) return;
+      var translated = data && data.responseData && data.responseData.translatedText;
+      resultEl.textContent = translated ? translated : "Não encontrei tradução para essa palavra.";
+    }).catch(function() {
+      var resultEl = document.getElementById("lyricsWordResult");
+      if (resultEl) resultEl.textContent = "Não foi possível buscar a tradução agora.";
+    });
+  }
+  function showLyricsWordLookup(rawWord, prevRawWord) {
+    var cleaned = cleanLyricsWord(rawWord);
+    if (!cleaned) return;
+    var lower = cleaned.toLowerCase();
+    var prevLower = prevRawWord ? cleanLyricsWord(prevRawWord).toLowerCase() : null;
+    var resolved = modalConjugation(lower, prevLower) || ambiguousSense(lower, prevLower);
+    var html = guessWordHtml(cleaned, "lyricsWordLookup") + '<div id="lyricsWordResult" style="margin-top:0.6rem;font-size:0.9rem;color:var(--ink-soft);">Buscando tradução…</div>';
+    if (resolved) html += resolved.isModal ? modalNoteHtml(lower, resolved) : ambiguousNoteHtml(lower, resolved);
+    if (GRAMMAR_NOTES[lower]) html += '<div class="grammar-note">💡 <strong>Nota gramatical:</strong> ' + GRAMMAR_NOTES[lower] + '</div>';
+    html += contractionNoteHtml(cleaned);
+    lyricsWordBox.innerHTML = html;
+    lyricsWordBox.style.display = "block";
+    wireGuessWordSpeak("lyricsWordLookup", cleaned);
+    fetchWordTranslation(cleaned);
+  }
+  lyricsLinesEl.addEventListener("click", function(e) {
+    var lineBtn = e.target.closest(".lyrics-line-btn");
+    if (lineBtn) {
+      var li = parseInt(lineBtn.getAttribute("data-li"), 10);
+      speakText(lyricsLines[li], null, speechRate);
+      return;
+    }
+    var tok = e.target.closest(".word-token");
+    if (!tok) return;
+    var prevTok = tok.previousElementSibling;
+    showLyricsWordLookup(tok.getAttribute("data-word"), prevTok ? prevTok.getAttribute("data-word") : null);
   });
 
   // ---------------------------------------------------------------------
