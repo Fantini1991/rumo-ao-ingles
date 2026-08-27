@@ -453,6 +453,7 @@
         <input type="text" id="videoSearchInput" placeholder="nome da música, cantor ou vídeo..." autocomplete="off" style="flex:1;min-width:0;font:inherit;padding:0.6rem 0.8rem;border-radius:0.55rem;border:1px solid var(--line);background:var(--surface);">
         <button class="btn btn-accent" id="videoSearchBtn" type="button">Buscar</button>
       </div>
+      <div class="picker" id="videoCategoryPicker" style="margin-top:0.7rem;"></div>
       <div id="videoSearchStatus" style="margin-top:0.5rem;font-size:0.85rem;color:var(--ink-soft);"></div>
     </section>
     <section id="videoPlayerSection" style="display:none;">
@@ -2692,8 +2693,30 @@
   var videoResultsEl = document.getElementById("videoResults");
   var videoPlayerSection = document.getElementById("videoPlayerSection");
   var videoEmbedFrame = document.getElementById("videoEmbedFrame");
-  function runVideoSearch() {
-    var q = videoSearchInput.value.trim();
+  var videoCategoryPicker = document.getElementById("videoCategoryPicker");
+  var VIDEO_CATEGORIES = [
+    { label: "Pedindo comida", query: "ordering food at a restaurant conversation english" },
+    { label: "Se apresentando", query: "introducing yourself in english conversation" },
+    { label: "No trabalho", query: "workplace conversation english practice" },
+    { label: "No aeroporto", query: "at the airport english conversation practice" },
+    { label: "Fazendo compras", query: "shopping conversation english practice" },
+    { label: "No médico", query: "at the doctor english conversation practice" },
+    { label: "Pedindo direções", query: "asking for directions english conversation practice" },
+    { label: "Small talk", query: "small talk english conversation practice" }
+  ];
+  videoCategoryPicker.innerHTML = VIDEO_CATEGORIES.map(function(c, i) {
+    return '<button class="chip-btn" data-i="' + i + '" type="button">' + c.label + '</button>';
+  }).join('');
+  videoCategoryPicker.addEventListener("click", function(e) {
+    var btn = e.target.closest(".chip-btn");
+    if (!btn) return;
+    Array.prototype.forEach.call(videoCategoryPicker.querySelectorAll(".chip-btn"), function(b) { b.classList.toggle("active", b === btn); });
+    var cat = VIDEO_CATEGORIES[parseInt(btn.getAttribute("data-i"), 10)];
+    videoSearchInput.value = cat.label;
+    runVideoSearch(cat.query);
+  });
+  function runVideoSearch(queryOverride) {
+    var q = (queryOverride || videoSearchInput.value).trim();
     if (!q) return;
     videoSearchStatus.textContent = "Buscando…";
     videoResultsEl.innerHTML = "";
