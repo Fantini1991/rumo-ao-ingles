@@ -157,6 +157,8 @@
   .legend .dot.known { background: var(--success); }
 
   /* Leitura glossary */
+  .pron-word { cursor: pointer; border-radius: 0.2rem; }
+  .pron-word:hover { background: var(--accent-soft); }
   .glossary-word { cursor: pointer; color: var(--teal); border-bottom: 2px dashed var(--teal); font-weight: 600; }
   .glossary-word.status-learning { color: var(--accent-ink); border-bottom-color: var(--accent); }
   .glossary-word.status-known { color: var(--success); border-bottom-color: var(--success); border-bottom-style: solid; }
@@ -349,7 +351,15 @@
     </section>
     <section class="stats-row" id="leituraStats"></section>
     <section>
-      <div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap;"><h3 id="leituraTitle" style="margin:0;"></h3><button class="btn btn-ghost" id="leituraShuffleBtn" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">🔀 Outro texto</button></div><div class="passage-text" id="leituraPassage"></div></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap;"><h3 id="leituraTitle" style="margin:0;"></h3><button class="btn btn-ghost" id="leituraShuffleBtn" type="button" style="font-size:0.78rem;padding:0.35rem 0.7rem;">🔀 Outro texto</button></div><div class="passage-text" id="leituraPassage"></div>
+        <p style="color:var(--ink-soft);font-size:0.8rem;margin-top:0.6rem;">💡 Clique numa palavra sublinhada pra ver o significado, ou em qualquer outra palavra pra ouvir a pronúncia.</p>
+      </div>
+    </section>
+    <section>
+      <div class="card">
+        <div class="step-label">Leia este texto em voz alta</div>
+        <div id="leituraReadArea"></div>
+      </div>
     </section>
     <section class="modal-overlay" id="guessSection" style="display:none;">
       <div class="guess-modal-wrap">
@@ -2337,10 +2347,10 @@
       return '<button class="chip-btn' + (id === leituraLevel ? " active" : "") + '" data-id="' + id + '" type="button">' + LEVEL_META[id].label + '</button>';
     }).join('');
     Array.prototype.forEach.call(leituraLevelPicker.querySelectorAll(".chip-btn"), function(b) {
-      b.onclick = function() { leituraLevel = b.getAttribute("data-id"); activeGuessWord = null; leituraCurrentText = pickText(LEITURA_STORIES[leituraLevel], "leitura", leituraLevel); renderLeitura(); };
+      b.onclick = function() { leituraLevel = b.getAttribute("data-id"); activeGuessWord = null; leituraCurrentText = pickText(LEITURA_STORIES[leituraLevel], "leitura", leituraLevel); leituraReadPhase = "idle"; leituraReadTranscript = ""; renderLeitura(); renderLeituraReadArea(); };
     });
   }
-  document.getElementById("leituraShuffleBtn").onclick = function() { activeGuessWord = null; leituraCurrentText = pickText(LEITURA_STORIES[leituraLevel], "leitura", leituraLevel); renderLeitura(); };
+  document.getElementById("leituraShuffleBtn").onclick = function() { activeGuessWord = null; leituraCurrentText = pickText(LEITURA_STORIES[leituraLevel], "leitura", leituraLevel); leituraReadPhase = "idle"; leituraReadTranscript = ""; renderLeitura(); renderLeituraReadArea(); };
   function renderLeitura() {
     renderLeituraPicker();
     var s = leituraCurrentText;
@@ -2352,7 +2362,7 @@
         var prevAttr = prevW ? ' data-prev="' + prevW + '"' : "";
         return '<span class="glossary-word status-' + (state.knownWords[norm] || "new") + '" data-word="' + norm + '"' + prevAttr + '>' + w + '</span>';
       }
-      return w;
+      return '<span class="pron-word" data-word="' + w + '" title="Ouvir pronúncia">' + w + '</span>';
     });
     var glossKeys = Object.keys(s.glossary);
     var glossKnown = glossKeys.filter(function(w) { return state.knownWords[w] === "known"; }).length;
@@ -2427,7 +2437,60 @@
     if (!state.savedPhrases.length) { list.innerHTML = '<span style="color:var(--ink-soft);font-size:0.85rem;">Ainda vazio — clique numa palavra sublinhada no texto para começar.</span>'; return; }
     list.innerHTML = state.savedPhrases.map(function(p) { return '<span class="notebook-chip"><strong>' + p.en + '</strong> — <span>' + p.pt + '</span></span>'; }).join('');
   }
+  var leituraReadPhase = "idle"; // idle | recording | done
+  var leituraReadTranscript = "";
+  var leituraReadArea = document.getElementById("leituraReadArea");
+  function renderLeituraReadArea() {
+    var passage = leituraCurrentText.text;
+    var html = "";
+    if (leituraReadPhase !== "recording") html += '<button class="btn btn-accent" id="leituraStartReadBtn" type="button" ' + (SpeechRecognitionCtor ? "" : "disabled") + '>🎤 Começar leitura</button>';
+    else html += '<button class="btn btn-review" id="leituraStopReadBtn" type="button">■ Terminar e avaliar</button>';
+    if (!SpeechRecognitionCtor) html += '<p class="caveat">Reconhecimento de voz não é suportado neste navegador.</p>';
+    if (leituraReadPhase !== "idle") html += '<div class="transcript-box" id="leituraReadTranscriptBox" style="margin-top:0.8rem;">' + (leituraReadTranscript || "sua fala aparece aqui em tempo real...") + '</div>';
+    if (leituraReadPhase === "done") {
+      var score = diffScore(passage, leituraReadTranscript);
+      var missed = missedWords(passage, leituraReadTranscript);
+      var tips = getPronTips(missed);
+      html += '<div class="stats-row" style="max-width:300px;margin-top:0.9rem;"><div class="stat-tile accent"><div class="stat-label">Acerto</div><div class="stat-value">' + score + '%</div></div></div>';
+      html += '<div class="diff-line" style="margin-top:0.7rem;">' + renderDiffHtml(passage, leituraReadTranscript) + '</div>';
+      html += '<div class="tip-list" style="margin-top:0.9rem;">' + (tips.length ? tips.map(function(t) { return '<div class="tip-item">' + t + '</div>'; }).join('') : '<div class="tip-item">Nenhum padrão específico identificado — mande ver!</div>') + '</div>';
+    }
+    leituraReadArea.innerHTML = html;
+    if (leituraReadPhase !== "recording") {
+      var startBtn = document.getElementById("leituraStartReadBtn");
+      if (startBtn) startBtn.onclick = startLeituraRead;
+    } else {
+      document.getElementById("leituraStopReadBtn").onclick = stopLeituraRead;
+    }
+  }
+  function startLeituraRead() {
+    if (!testRecognition || testRecognizing) return;
+    leituraReadTranscript = "";
+    leituraReadPhase = "recording";
+    renderLeituraReadArea();
+    testRecognition.onresult = function(event) {
+      var interim = "";
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) leituraReadTranscript += event.results[i][0].transcript + " ";
+        else interim += event.results[i][0].transcript;
+      }
+      var box = document.getElementById("leituraReadTranscriptBox");
+      if (box) box.textContent = (leituraReadTranscript + interim) || "ouvindo...";
+    };
+    testRecognition.onerror = function() {};
+    testRecognition.onend = function() { testRecognizing = false; };
+    try { testRecognition.start(); testRecognizing = true; } catch (e) {}
+  }
+  function stopLeituraRead() {
+    if (testRecognition && testRecognizing) testRecognition.stop();
+    leituraReadPhase = "done";
+    markHabitDone("leitura");
+    renderLeituraReadArea();
+  }
+  renderLeituraReadArea();
   leituraPassageEl.addEventListener("click", function(e) {
+    var pronSpan = e.target.closest(".pron-word");
+    if (pronSpan) { speakText(pronSpan.getAttribute("data-word"), null, speechRate); return; }
     var span = e.target.closest(".glossary-word");
     if (!span) return;
     activeGuessWord = span.getAttribute("data-word");
