@@ -197,7 +197,7 @@
   .video-result-title { font-size: 0.85rem; padding: 0.5rem 0.6rem; line-height: 1.3; }
   .video-embed-wrap { position: relative; width: 100%; max-width: 720px; aspect-ratio: 16/9; margin-top: 0.8rem; border-radius: 0.6rem; overflow: hidden; background: #000; }
   .video-embed-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-  .lyrics-line { display: flex; align-items: flex-start; gap: 0.5rem; }
+  .lyrics-line { display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap; }
   .lyrics-line-btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 50%; width: 1.9rem; height: 1.9rem; flex-shrink: 0; cursor: pointer; font-size: 0.85rem; }
   .lyrics-line-btn:hover { color: var(--ink); }
   .lyrics-line-text { line-height: 1.6; }
@@ -466,6 +466,7 @@
       </div>
       <div id="lyricsLines" style="margin-top:0.9rem;display:flex;flex-direction:column;gap:0.5rem;"></div>
       <div id="lyricsWordBox" class="card" style="margin-top:0.9rem;display:none;max-width:480px;"></div>
+      <div id="lyricsLineBox" class="card" style="margin-top:0.9rem;display:none;max-width:640px;"></div>
     </section>
     <section>
       <div id="videoResults" class="video-results-grid"></div>
@@ -2765,7 +2766,7 @@
       var wordsHtml = words.map(function(w) {
         return '<span class="word-token" data-word="' + escapeAttr(w) + '">' + escapeHtml(w) + '</span>';
       }).join(' ');
-      return '<div class="lyrics-line"><button class="lyrics-line-btn" data-li="' + li + '" type="button" title="Ouvir esta linha">🔊</button><span class="lyrics-line-text">' + wordsHtml + '</span></div>';
+      return '<div class="lyrics-line"><button class="lyrics-line-btn" data-li="' + li + '" type="button" title="Ouvir esta linha">🔊</button><span class="lyrics-line-text">' + wordsHtml + '</span><button class="btn btn-ghost lyrics-line-practice-btn" data-li="' + li + '" type="button" style="padding:0.25rem 0.6rem;font-size:0.78rem;flex-shrink:0;">Praticar</button></div>';
     }).join('');
   };
   function cleanLyricsWord(w) { return w.replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, ""); }
@@ -2796,7 +2797,69 @@
     wireGuessWordSpeak("lyricsWordLookup", cleaned);
     fetchWordTranslation(cleaned);
   }
+  var lyricsLineBox = document.getElementById("lyricsLineBox");
+  function fetchLineTranslation(line, onDone) {
+    var url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(line) + "&langpair=en|pt-br";
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      var translated = data && data.responseData && data.responseData.translatedText;
+      onDone(translated || null);
+    }).catch(function() { onDone(null); });
+  }
+  function showLyricsLinePractice(li) {
+    var line = lyricsLines[li];
+    lyricsLineBox.innerHTML =
+      '<div class="step-label">Praticar esta linha</div><div class="source-text">' + escapeHtml(line) + '</div>' +
+      '<div class="btn-row" style="margin-top:0.6rem;align-items:center;">' +
+        '<button class="btn btn-ghost" id="lyricsLineListenBtn" type="button">🔊 Ouvir</button>' +
+        '<button class="btn btn-ghost speed-toggle-btn" id="lyricsLineSpeedBtn" type="button">' + speedBtnLabel() + '</button>' +
+        (SpeechRecognitionCtor ? '<button class="mic-btn" id="lyricsLineMicBtn" type="button" aria-label="Praticar pronúncia" style="width:2.4rem;height:2.4rem;font-size:1.05rem;">🎤</button>' : '') +
+      '</div>' +
+      '<div class="pronounce-feedback idle" id="lyricsLinePronFeedback" style="margin-top:0.4rem;display:none;"></div>' +
+      '<textarea class="field" id="lyricsLineTransInput" placeholder="sua tradução em português..." style="margin-top:0.7rem;"></textarea>' +
+      '<div class="btn-row" style="margin-top:0.7rem;"><button class="btn btn-accent" id="lyricsLineCheckBtn" type="button">Verificar tradução</button></div>' +
+      '<div id="lyricsLineTransResult" style="margin-top:0.7rem;display:none;"></div>';
+    lyricsLineBox.style.display = "block";
+    lyricsLineBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.getElementById("lyricsLineListenBtn").onclick = function() { speakText(line, null, speechRate); };
+    wireSpeedBtn("lyricsLineSpeedBtn");
+    var micBtn = document.getElementById("lyricsLineMicBtn");
+    if (micBtn) {
+      micBtn.addEventListener("click", function() {
+        var fb = document.getElementById("lyricsLinePronFeedback");
+        startMic({
+          onStart: function() { micBtn.classList.add("listening"); micBtn.textContent = "●"; fb.style.display = "block"; fb.className = "pronounce-feedback idle"; fb.textContent = "Ouvindo…"; },
+          onResult: function(heard) {
+            var grade = gradePhrase(line, heard);
+            if (grade === "ok") { fb.className = "pronounce-feedback ok"; fb.innerHTML = "✓ Muito bem — \"" + heard + "\""; }
+            else if (grade === "close") { fb.className = "pronounce-feedback close"; fb.innerHTML = "≈ Quase lá — ouvi \"" + heard + "\""; }
+            else { fb.className = "pronounce-feedback miss"; fb.innerHTML = "✕ Ouvi \"" + heard + "\" — tente de novo"; }
+          },
+          onError: function(err) { fb.style.display = "block"; fb.className = "pronounce-feedback miss"; fb.textContent = micErrorMessage(err); },
+          onEnd: function() { micBtn.classList.remove("listening"); micBtn.textContent = "🎤"; }
+        });
+      });
+    }
+    document.getElementById("lyricsLineCheckBtn").onclick = function() {
+      var given = document.getElementById("lyricsLineTransInput").value;
+      var checkBtn = document.getElementById("lyricsLineCheckBtn");
+      var resultEl = document.getElementById("lyricsLineTransResult");
+      checkBtn.disabled = true;
+      resultEl.style.display = "block";
+      resultEl.innerHTML = '<p style="color:var(--ink-soft);font-size:0.85rem;">Buscando tradução de referência…</p>';
+      fetchLineTranslation(line, function(reference) {
+        checkBtn.disabled = false;
+        if (!reference) { resultEl.innerHTML = '<p class="pronounce-feedback miss">Não foi possível buscar a tradução de referência agora.</p>'; return; }
+        var score = diffScore(reference, given);
+        resultEl.innerHTML =
+          '<div class="stats-row" style="max-width:300px;"><div class="stat-tile accent"><div class="stat-label">Similaridade</div><div class="stat-value">' + score + '%</div></div></div>' +
+          '<div class="diff-line" style="margin-top:0.6rem;">' + renderDiffHtml(reference, given) + '</div>' +
+          '<p class="caveat" style="margin-top:0.5rem;">Referência buscada automaticamente — pode não ser a única forma certa de traduzir.</p>';
+      });
+    };
+  }
   lyricsLinesEl.addEventListener("click", function(e) {
+    var practiceBtn = e.target.closest(".lyrics-line-practice-btn");
+    if (practiceBtn) { showLyricsLinePractice(parseInt(practiceBtn.getAttribute("data-li"), 10)); return; }
     var lineBtn = e.target.closest(".lyrics-line-btn");
     if (lineBtn) {
       var li = parseInt(lineBtn.getAttribute("data-li"), 10);
